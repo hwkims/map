@@ -1,4 +1,5 @@
 # 🚀 Advanced Web Navigation (map) 🚀
+![image](https://github.com/user-attachments/assets/be2934f9-c2ef-4a7a-a68d-da6cc3ee6980)
 
 Leaflet.js 기반의 고급 웹 내비게이션 데모 애플리케이션입니다. 글래스모피즘 UI, 다양한 입력 방식(텍스트, 지도 클릭, 음성), 경로 유형 및 지도 스타일 선택 기능을 제공하며, **별도의 API 키 없이** (Daum 우편번호 서비스, OpenStreetMap Nominatim/OSRM 데모 서버 활용) 기본적인 주소 검색 및 경로 탐색 기능을 구현한 예제입니다.
 
