@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <title>🚀 최종 완성! 글래스모피즘 내비게이션 🚀</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Leaflet Routing Machine -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <!-- Tailwind CSS (CDN for Demo) -->
+    <!-- Note: Using Tailwind CDN is not recommended for production. Install via npm/yarn. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Daum 우편번호 서비스 (Use https) -->
+    <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+
+    <style>
+        /* 기본 스타일, 글래스모피즘, 버튼 등 (이전 코드와 거의 동일) */
+        :root { --toast-bg: rgba(0, 0, 0, 0.7); --toast-text: white; }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; } /* html, body 높이 100% */
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+
+        /* 지도 컨테이너 */
+        #map-container { flex-grow: 1; position: relative; /* 자식 absolute 요소 기준점 */ }
+        #map { height: 100%; width: 100%; z-index: 10; } /* 높이 100% 명시 */
+
+        /* 컨트롤 패널 */
+        #controls-wrapper { position: absolute; top: 0; left: 0; right: 0; z-index: 20; padding: 0.5rem; pointer-events: none; }
+        #controls { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2); color: #1f2937; border-radius: 0.75rem; padding: 0.75rem; margin: 0 auto; max-width: 600px; width: auto; pointer-events: auto; transition: transform 0.3s ease-out, opacity 0.3s ease-out; }
+        #controls.hidden-ui { transform: translateY(-110%); opacity: 0; pointer-events: none; }
+
+        /* UI 토글 버튼 */
+        #ui-toggle-button { position: absolute; top: 10px; right: 10px; z-index: 25; background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 50%; padding: 0.5rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        #ui-toggle-button:hover { background: rgba(255, 255, 255, 0.5); }
+        #ui-toggle-button svg { width: 1.25rem; height: 1.25rem; color: #374151; stroke-width: 1.5; }
+
+        /* 입력 필드, 버튼, 탭 등 나머지 스타일 (이전 코드 유지) */
+        .input-group { display: flex; align-items: center; background: rgba(255, 255, 255, 0.4); border-radius: 8px; padding: 2px; border: 1px solid rgba(255, 255, 255, 0.2); }
+        .input-group input { flex-grow: 1; border: none; background: transparent; padding: 8px 10px; outline: none; font-size: 0.9rem; color: #374151;}
+        .input-group input::placeholder { color: #6b7280; }
+        .input-group button { background: rgba(255, 255, 255, 0.5); border: none; border-radius: 6px; padding: 6px; margin-left: 4px; cursor: pointer; transition: background 0.2s ease; }
+        .input-group button:hover { background: rgba(255, 255, 255, 0.7); }
+        .input-group svg { width: 1rem; height: 1rem; color: #4b5563; }
+        .control-btn { display: flex; align-items: center; justify-content: center; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.2); color: #374151; font-weight: 500; cursor: pointer; transition: all 0.2s ease; text-align: center; font-size: 0.85rem; }
+        .control-btn:hover { background: rgba(255, 255, 255, 0.6); transform: translateY(-1px); }
+        .control-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; background: rgba(200, 200, 200, 0.3); }
+        .control-btn svg { width: 1rem; height: 1rem; margin-right: 5px; stroke-width: 1.5; }
+        .control-btn.active, .profile-btn.active, .map-style-btn.active { background: rgba(59, 130, 246, 0.7); color: white; border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+        .control-btn.active svg, .profile-btn.active svg, .map-style-btn.active svg { color: white; }
+        #btn-mic.listening { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
+        .tab-group { display: flex; background: rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .tab-group button { flex: 1; padding: 6px 8px; border: none; background: transparent; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; font-size: 0.8rem; font-weight: 500; color: #4b5563; }
+        .tab-group button.active { background: rgba(255, 255, 255, 0.7); color: #1f2937; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .loader { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; margin-left: 6px; vertical-align: middle; }
+        #status-container { font-size: 0.8rem; }
+        .emoji-marker { font-size: 2rem; text-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        #postcode-layer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 30; }
+        #postcode-content-wrapper { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; background: #fff; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding-top: 35px; }
+        #postcode-content { width: 100%; height: 450px; border-radius: 0 0 12px 12px; overflow: hidden; }
+        #btn-close-postcode { cursor: pointer; position: absolute; right: 10px; top: 8px; z-index: 1; font-size: 1.5rem; color: #666; background: transparent; border: none; padding: 0; line-height: 1; }
+        #btn-close-postcode:hover { color: #000; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--toast-bg); color: var(--toast-text); padding: 10px 20px; border-radius: 20px; z-index: 1000; font-size: 0.9rem; opacity: 0; transition: opacity 0.5s ease; pointer-events: none; }
+        #toast.show { opacity: 1; pointer-events: auto; }
+        .leaflet-routing-container { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #333; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <!-- 지도 컨테이너 -->
+    <div id="map-container">
+        <div id="map"></div>
+
+        <!-- UI 토글 버튼 -->
+        <button id="ui-toggle-button" title="UI 숨기기/보이기">
+            <svg id="icon-hide" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L6.228 6.228" />
+            </svg>
+             <svg id="icon-show" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="hidden">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+               <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+             </svg>
+        </button>
+
+        <!-- 상단 컨트롤 패널 (Wrapper) -->
+        <div id="controls-wrapper">
+            <div id="controls" class="space-y-3">
+                <!-- 입력 필드 그룹 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div class="input-group">
+                        <span class="pl-2 text-green-700">📍</span>
+                        <input type="text" id="input-start" placeholder="출발지 검색 또는 지도 클릭">
+                        <button id="btn-search-start-input" title="출발지 주소 검색">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                        </button>
+                    </div>
+                    <div class="input-group">
+                        <span class="pl-2 text-red-600">🏁</span>
+                        <input type="text" id="input-end" placeholder="목적지 검색 또는 지도/음성 입력">
+                        <button id="btn-search-end-input" title="목적지 주소 검색">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                        </button>
+                        <button id="btn-mic" class="control-btn !p-1.5 !ml-1" title="음성으로 목적지 입력">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" /></svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- 지도 클릭 / 현재 위치 버튼 그룹 -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-click-start" class="control-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.375 17.55a1.5 1.5 0 0 1-1.401 1.415l-3.405-1.513a1.5 1.5 0 0 1-.9-1.317V8.683a1.5 1.5 0 0 1 2.77-.726l4.04 7.498a1.5 1.5 0 0 1-1.104 2.105Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                       지도 출발
+                   </button>
+                   <button id="btn-click-end" class="control-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.375 17.55a1.5 1.5 0 0 1-1.401 1.415l-3.405-1.513a1.5 1.5 0 0 1-.9-1.317V8.683a1.5 1.5 0 0 1 2.77-.726l4.04 7.498a1.5 1.5 0 0 1-1.104 2.105Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                       지도 목적
+                   </button>
+                    <button id="btn-current-location" class="control-btn col-span-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                       내 위치를 출발지로
+                   </button>
+               </div>
+                <!-- 경로 프로필 / 지도 스타일 선택 그룹 -->
+               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                   <div>
+                        <label class="block text-xs font-medium mb-1">경로 유형</label>
+                        <div class="tab-group" id="profile-tabs">
+                            <button data-profile="driving" class="profile-btn">🚗 자동차</button>
+                            <button data-profile="walking" class="profile-btn">🚶 도보</button>
+                            <button data-profile="bike" class="profile-btn">🚲 자전거</button>
+                        </div>
+                   </div>
+                    <div>
+                        <label for="map-style-select" class="block text-xs font-medium mb-1">지도 스타일</label>
+                        <select id="map-style-select" class="w-full p-2 rounded-lg bg-white/40 border border-white/20 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                            <option value="voyager">Voyager (기본)</option>
+                            <option value="osmDefault">OpenStreetMap</option>
+                            <option value="satellite">위성 지도</option>
+                            <option value="dark">다크 모드</option>
+                        </select>
+                   </div>
+               </div>
+                <!-- 경로 찾기 버튼 -->
+               <button id="btn-find-route" class="control-btn w-full mt-3 !bg-blue-600/80 !text-white !font-bold text-base !py-2.5 disabled:!bg-gray-400/50" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.769 59.769 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" /></svg>
+                   경로 안내 시작
+               </button>
+                <!-- 상태 메시지 & 경고 -->
+               <div id="status-container" class="text-center text-xs pt-1">
+                    <span id="status" class="text-gray-700">출발지와 목적지를 설정하세요.</span>
+                    <span id="loading-indicator" class="hidden font-semibold text-blue-700">처리 중... <span class="loader !border-blue-300 !border-t-blue-600"></span></span>
+               </div>
+                <div class="text-center text-xs text-red-700/80 mt-1 font-medium">⚠️ API Key 없이 좌표 변환(Nominatim) 시 위치가 부정확할 수 있으며, 잦은 사용 시 제한될 수 있습니다.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daum 우편번호 레이어 -->
+    <div id="postcode-layer">
+        <div id="postcode-content-wrapper">
+             <button id="btn-close-postcode" onclick="closeDaumPostcode()">✖</button>
+            <div id="postcode-content"></div>
+        </div>
+    </div>
+
+    <!-- 토스트 메시지 -->
+    <div id="toast"></div>
+
+    <script>
+        // --- 전역 변수 및 초기화 ---
+        let map;
+        let currentTileLayer = null;
+        let startMarker = null, endMarker = null;
+        let startLatLng = null, endLatLng = null;
+        let settingMode = null; // 'click-start', 'click-end', 'search-start', 'search-end', 'listening', 'geocoding-voice', null
+        let routingControl = null;
+        let routingProfile = 'driving';
+        let isUIHidden = false;
+        let daumPostcodeInstance = null;
+
+        // --- API 객체 (안전하게 초기화) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        try {
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                 // recognition 설정 (옵션)
+                 recognition.continuous = false; // 단일 결과만 반환
+                 recognition.interimResults = false; // 중간 결과 반환 안함
+            } else {
+                console.warn("Speech Recognition not supported by this browser.");
+            }
+        } catch (e) {
+            console.error("Could not create SpeechRecognition object:", e);
+        }
+
+        const synthesis = window.speechSynthesis || null;
+        if (!synthesis) {
+            console.warn("Speech Synthesis (TTS) not supported by this browser.");
+        }
+
+        // --- UI 요소 ---
+        const controlsWrapper = document.getElementById('controls-wrapper');
+        const controlsPanel = document.getElementById('controls');
+        const uiToggleButton = document.getElementById('ui-toggle-button');
+        const iconHide = document.getElementById('icon-hide');
+        const iconShow = document.getElementById('icon-show');
+        const inputStart = document.getElementById('input-start');
+        const inputEnd = document.getElementById('input-end');
+        const btnSearchStartInput = document.getElementById('btn-search-start-input');
+        const btnSearchEndInput = document.getElementById('btn-search-end-input');
+        const btnMic = document.getElementById('btn-mic');
+        const btnClickStart = document.getElementById('btn-click-start');
+        const btnClickEnd = document.getElementById('btn-click-end');
+        const btnCurrentLocation = document.getElementById('btn-current-location');
+        const btnFindRoute = document.getElementById('btn-find-route');
+        const profileTabs = document.getElementById('profile-tabs');
+        const mapStyleSelect = document.getElementById('map-style-select');
+        const statusText = document.getElementById('status');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const mapContainer = document.getElementById('map-container');
+        const mapElement = document.getElementById('map');
+        const postcodeLayer = document.getElementById('postcode-layer');
+        const postcodeContent = document.getElementById('postcode-content');
+        const toastElement = document.getElementById('toast');
+
+        // --- 지도 타일 레이어 정의 ---
+        const tileLayers = {
+             voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors © <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }),
+             osmDefault: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors', maxZoom: 19 }),
+             satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri — Esri, i-cubed, USDA, USGS...', maxZoom: 18 }),
+             dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors © <a href="https://carto.com/attributions">CARTO</a>', subdomains: 'abcd', maxZoom: 20 })
+        };
+
+        // --- 유틸리티 함수 ---
+        function showToast(message, duration = 3000) {
+            toastElement.textContent = message;
+            toastElement.classList.add('show');
+            setTimeout(() => { toastElement.classList.remove('show'); }, duration);
+        }
+        function speak(text) {
+             if (!synthesis) return;
+             try {
+                if (synthesis.speaking) synthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = 1.0;
+                synthesis.speak(utterance);
+             } catch (e) { console.error("TTS Error:", e); }
+        }
+
+        // --- UI 및 상태 관리 ---
+        function showLoading(message = "처리 중...") {
+             statusText.classList.add('hidden');
+             loadingIndicator.classList.remove('hidden');
+             loadingIndicator.firstChild.textContent = message + " ";
+        }
+        function hideLoading() {
+             loadingIndicator.classList.add('hidden');
+             statusText.classList.remove('hidden');
+        }
+        function updateUI(message = null) {
+             let statusMsg = message || "";
+             if (!message) {
+                 if (settingMode === 'click-start') statusMsg = "지도에서 📍 출발지를 클릭하세요.";
+                 else if (settingMode === 'click-end') statusMsg = "지도에서 🏁 목적지를 클릭하세요.";
+                 else if (settingMode === 'listening') statusMsg = "🎤 목적지를 말씀해주세요...";
+                 else if (settingMode === 'geocoding-voice') statusMsg = "🗣️ 음성 인식된 주소 좌표 찾는 중...";
+                 else if (settingMode?.startsWith('search')) statusMsg = currentSearchType === 'start' ? '📮 출발지 주소를 검색 중...' : '📮 목적지 주소를 검색 중...';
+                 else if (!startLatLng && !endLatLng) statusMsg = "출발/목적지를 설정하세요.";
+                 else if (!startLatLng) statusMsg = "📍 출발지를 설정하세요.";
+                 else if (!endLatLng) statusMsg = "🏁 목적지를 설정하세요.";
+                 else statusMsg = "✅ 경로 탐색 준비 완료!";
+             }
+             statusText.textContent = statusMsg;
+
+             // 경로 찾기 버튼 활성화 조건 확인 및 디버깅 로그
+             const isRouteReady = startLatLng instanceof L.LatLng && endLatLng instanceof L.LatLng;
+             btnFindRoute.disabled = !isRouteReady;
+             console.log(`updateUI: startLatLng=${startLatLng ? `[${startLatLng.lat}, ${startLatLng.lng}]` : 'null'}, endLatLng=${endLatLng ? `[${endLatLng.lat}, ${endLatLng.lng}]` : 'null'}, Route Ready=${isRouteReady}, Button Disabled=${btnFindRoute.disabled}`);
+
+             // 기타 UI 상태 업데이트
+             mapElement.classList.toggle('setting-mode-cursor', settingMode === 'click-start' || settingMode === 'click-end');
+             btnMic.classList.toggle('listening', settingMode === 'listening');
+             [btnClickStart, btnClickEnd].forEach(btn => btn.classList.remove('active'));
+             if (settingMode === 'click-start') btnClickStart.classList.add('active');
+             if (settingMode === 'click-end') btnClickEnd.classList.add('active');
+
+             hideLoading(); // 로딩 표시 숨김
+        }
+        function toggleUI() {
+             isUIHidden = !isUIHidden;
+             controlsPanel.classList.toggle('hidden-ui', isUIHidden);
+             iconHide.classList.toggle('hidden', isUIHidden);
+             iconShow.classList.toggle('hidden', !isUIHidden);
+             uiToggleButton.setAttribute('title', isUIHidden ? 'UI 보이기' : 'UI 숨기기');
+             if (map) { setTimeout(() => map.invalidateSize({ animate: true }), 310); }
+        }
+
+        // --- 마커 관련 (이모지) ---
+        function createOrUpdateMarker(type, latlng, popupContent, openPopup = true) {
+             // 좌표 유효성 검사
+             if (!(latlng && typeof latlng.lat === 'number' && typeof latlng.lng === 'number')) {
+                 console.error("Invalid LatLng object passed to createOrUpdateMarker:", latlng);
+                 showToast("잘못된 위치 정보입니다.");
+                 if (settingMode?.startsWith('click')) settingMode = null; // 클릭 모드만 해제
+                 updateUI("위치 설정 오류"); // UI 업데이트
+                 return;
+             }
+             const validLatLng = L.latLng(latlng.lat, latlng.lng);
+             console.log(`createOrUpdateMarker called for ${type} at [${validLatLng.lat}, ${validLatLng.lng}]`);
+
+             const emoji = type === 'start' ? '📍' : '🏁';
+             const customIcon = L.divIcon({
+                 html: `<span class="emoji-marker">${emoji}</span>`,
+                 className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -35]
+             });
+
+             let targetMarker = type === 'start' ? startMarker : endMarker;
+             if (targetMarker) {
+                 console.log(`Removing previous ${type} marker.`);
+                 map.removeLayer(targetMarker);
+             }
+
+             const newMarker = L.marker(validLatLng, { icon: customIcon }).addTo(map).bindPopup(popupContent);
+             console.log(`${type} marker created.`);
+
+             // 상태 변수 업데이트
+             if (type === 'start') {
+                 startMarker = newMarker;
+                 startLatLng = validLatLng;
+                 console.log("startLatLng updated:", startLatLng);
+             } else {
+                 endMarker = newMarker;
+                 endLatLng = validLatLng;
+                 console.log("endLatLng updated:", endLatLng);
+             }
+
+             if (openPopup) {
+                 setTimeout(() => {
+                     if (newMarker && map.hasLayer(newMarker)) {
+                         newMarker.openPopup();
+                     }
+                 }, 100);
+             }
+
+             // 모드 해제 (클릭 모드일 때만) 및 UI 업데이트
+             if (settingMode?.startsWith('click')) {
+                 console.log(`Resetting settingMode from ${settingMode} to null`);
+                 settingMode = null;
+             }
+             updateUI(); // 상태 변경 후 UI 갱신 호출
+        }
+
+
+        // --- 주소 검색 (Daum + Nominatim) ---
+        function openDaumPostcode(searchType) {
+             if (typeof daum === 'undefined' || typeof daum.Postcode === 'undefined') {
+                 showToast("주소 검색 서비스를 로드할 수 없습니다.", 5000);
+                 return;
+             }
+             currentSearchType = searchType;
+             settingMode = `search-${searchType}`;
+             updateUI();
+             postcodeContent.innerHTML = '';
+
+             try {
+                if (!daumPostcodeInstance) {
+                    daumPostcodeInstance = new daum.Postcode({
+                        oncomplete: handleDaumPostcodeComplete,
+                        onclose: handleDaumPostcodeClose,
+                        width: '100%', height: '100%', maxSuggestItems: 5,
+                        theme: { searchBgColor: "#F0F4F8", queryTextColor: "#333" }
+                    });
+                }
+                daumPostcodeInstance.embed(postcodeContent);
+                postcodeLayer.style.display = 'block';
+             } catch (error) {
+                 console.error("Error opening Daum Postcode:", error);
+                 showToast("주소 검색 창을 여는 데 실패했습니다.");
+                 settingMode = null;
+                 updateUI();
+             }
+        }
+        function handleDaumPostcodeComplete(data) {
+             let fullAddress = data.roadAddress || data.jibunAddress;
+             const simplifiedAddress = data.buildingName || fullAddress?.split(' ')?.slice(0, 3)?.join(' ') || "선택된 주소"; // 주소 파싱 오류 대비
+             console.log("Daum Postcode Data:", data);
+             closeDaumPostcode(); // 결과 처리 시작 시 먼저 닫기
+
+             if (fullAddress) {
+                 showLoading(`${currentSearchType === 'start' ? '📍' : '🏁'} '${simplifiedAddress}' 좌표 찾는 중...`);
+                 geocodeAddressNominatim(fullAddress, (latlng) => {
+                     if (latlng) {
+                         const markerType = currentSearchType; // 클로저 변수
+                         const popupText = `${markerType === 'start' ? '📍 출발' : '🏁 목적'}: ${data.buildingName || fullAddress}`;
+                         if(markerType === 'start') inputStart.value = simplifiedAddress;
+                         else inputEnd.value = simplifiedAddress;
+
+                         createOrUpdateMarker(markerType, latlng, popupText); // 내부에서 latlng 설정 및 updateUI 호출
+                         if (map) map.setView(latlng, 16);
+                         speak(`${markerType === 'start' ? '출발지' : '목적지'} ${simplifiedAddress} 설정 완료`);
+                         // updateUI는 createOrUpdateMarker 내부에서 호출됨
+                     } else {
+                         speak("죄송합니다. 해당 주소의 좌표를 찾을 수 없습니다.");
+                         showToast(`'${simplifiedAddress}'의 좌표를 찾을 수 없습니다 (Nominatim).`, 5000);
+                         updateUI("좌표 변환 실패."); // updateUI 호출
+                     }
+                     settingMode = null; // 지오코딩 시도 후 모드 해제
+                     hideLoading(); // 로딩 숨김
+                 });
+             } else {
+                 showToast("주소 정보가 올바르지 않습니다.");
+                 settingMode = null;
+                 updateUI(); // updateUI 호출
+                 hideLoading();
+             }
+        }
+        function handleDaumPostcodeClose(state) {
+             if (state !== 'COMPLETE_CLOSE') {
+                 closeDaumPostcode();
+                 if (settingMode?.startsWith('search')) {
+                     settingMode = null;
+                     updateUI();
+                 }
+             }
+        }
+        function closeDaumPostcode() {
+             postcodeLayer.style.display = 'none';
+        }
+        async function geocodeAddressNominatim(address, callback) {
+             // Nominatim 사용 경고 및 딜레이
+             console.warn("Nominatim API 호출: 사용량 제한 주의!", address);
+             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=kr`;
+             try {
+                 await new Promise(resolve => setTimeout(resolve, 500)); // 요청 지연
+                 const response = await fetch(url, { headers: { 'User-Agent': 'MyLeafletNavApp/1.0 (myemail@example.com)' } });
+                 if (!response.ok) throw new Error(`Nominatim API Error: ${response.statusText} (${response.status})`);
+                 const data = await response.json();
+                 if (data && data.length > 0 && data[0].lat && data[0].lon) {
+                     const lat = parseFloat(data[0].lat);
+                     const lon = parseFloat(data[0].lon);
+                     if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                         callback(L.latLng(lat, lon)); // L.latLng 객체 반환
+                     } else { callback(null); }
+                 } else { callback(null); }
+             } catch (error) {
+                 console.error("Nominatim Geocoding Failed:", error);
+                 callback(null);
+             }
+        }
+
+        // --- 음성 인식 ---
+        function startSpeechRecognition() {
+             if (!recognition) {
+                 showToast("음성 인식을 지원하지 않는 브라우저입니다. 😥");
+                 speak("죄송합니다. 이 브라우저에서는 음성 인식을 사용할 수 없습니다.");
+                 if (btnMic) btnMic.disabled = true;
+                 return;
+             }
+             if (settingMode === 'listening' || settingMode === 'geocoding-voice') return; // 중복 실행 방지
+
+             settingMode = 'listening';
+             updateUI();
+             showToast("마이크 권한을 요청할 수 있습니다.", 2000);
+             speak("마이크 권한이 필요할 수 있습니다. 목적지를 말씀해주세요.");
+
+             recognition.onresult = null; recognition.onerror = null; recognition.onend = null; // 리스너 초기화
+
+             recognition.lang = 'ko-KR';
+
+             recognition.onresult = async (event) => {
+                 const transcript = event.results[0][0].transcript;
+                 console.log('음성 인식 결과:', transcript);
+                 inputEnd.value = transcript;
+                 settingMode = 'geocoding-voice';
+                 updateUI();
+                 showLoading(`🗣️ '${transcript}' 좌표 찾는 중...`);
+                 speak(`${transcript} 주소를 찾고 있습니다.`);
+
+                 try {
+                     // 1. 현재 위치 가져오기
+                     const pos = await getCurrentLocationPromise();
+                     if (!(pos && pos.latlng)) throw new Error("Invalid location data received.");
+                     const currentLatLng = L.latLng(pos.latlng.lat, pos.latlng.lng);
+                     createOrUpdateMarker('start', currentLatLng, '📍 현재 위치 (출발)', false);
+                     console.log('현재 위치 설정 완료:', startLatLng); // startLatLng은 createOrUpdateMarker에서 설정됨
+
+                     // 2. 음성 인식된 주소 지오코딩
+                     geocodeAddressNominatim(transcript, (endGeoLatLng) => {
+                         hideLoading(); // 지오코딩 시도 후 로딩 숨김
+                         if (endGeoLatLng) {
+                             createOrUpdateMarker('end', endGeoLatLng, `🏁 목적: ${transcript}`, false);
+                             console.log('음성 목적지 설정 완료:', endLatLng); // endLatLng은 createOrUpdateMarker에서 설정됨
+                             speak(`${transcript} 목적지 설정 완료. 경로 탐색을 시작합니다.`);
+                             updateUI("✅ 음성 목적지 설정 완료."); // updateUI 호출
+                             // 3. 경로 탐색 시작 (좌표 설정 완료 확인 후)
+                             if (startLatLng && endLatLng) {
+                                findRoute();
+                             } else {
+                                console.error("Start or End LatLng not set after voice recognition flow.");
+                                showToast("경로 탐색 시작 실패: 위치 정보 부족");
+                             }
+                         } else {
+                             speak(`죄송합니다. ${transcript} 위치를 찾을 수 없습니다.`);
+                             showToast(`'${transcript}' 좌표를 찾을 수 없습니다. 😥`, 5000);
+                             updateUI("음성 인식 주소 좌표 변환 실패."); // updateUI 호출
+                         }
+                         settingMode = null; // 지오코딩 시도 후 모드 해제
+                     });
+
+                 } catch (error) {
+                     hideLoading();
+                     settingMode = null;
+                     let errorMsg = "현재 위치를 가져올 수 없어 경로 탐색을 시작할 수 없습니다.";
+                      if (error && error.message && error.message.includes("permission denied")) {
+                           errorMsg = "위치 정보 접근 권한이 거부되었습니다.";
+                      } else if (error && error.message) {
+                          errorMsg = `위치 오류: ${error.message}`;
+                      }
+                     speak(errorMsg);
+                     showToast(errorMsg, 4000);
+                     updateUI("현재 위치 오류.");
+                     console.error("Location or Geocoding Error in Voice Recognition:", error);
+                 }
+             };
+
+             recognition.onerror = (event) => { /* ... 이전과 동일 (오류 메시지, 모드 해제, UI 업데이트) ... */ };
+             recognition.onend = () => { /* ... 이전과 동일 (모드 해제, UI 업데이트) ... */ };
+
+             try { recognition.start(); } catch (e) { /* ... 오류 처리 ... */ }
+        }
+        function getCurrentLocationPromise() {
+             return new Promise((resolve, reject) => {
+                 if (!navigator.geolocation) { reject(new Error("Geolocation not supported.")); return; }
+                 navigator.geolocation.getCurrentPosition(
+                     (position) => { resolve({ latlng: { lat: position.coords.latitude, lng: position.coords.longitude } }); }, // Plain object 반환
+                     (error) => { reject(error); },
+                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                 );
+             });
+        }
+
+        // --- 경로 탐색 ---
+        function findRoute() {
+             if (!(startLatLng instanceof L.LatLng && endLatLng instanceof L.LatLng)) {
+                 showToast("출발지와 목적지 위치를 모두 설정해야 합니다.");
+                 console.error("findRoute aborted: Invalid start or end LatLng.", startLatLng, endLatLng);
+                 return;
+             }
+             const profileEmoji = routingProfile === 'driving' ? '🚗' : (routingProfile === 'walking' ? '🚶' : '🚲');
+             showLoading(`${profileEmoji} 경로 탐색 중...`);
+             speak(`선택하신 ${routingProfile === 'driving' ? '자동차' : (routingProfile === 'walking' ? '도보' : '자전거')} 경로를 탐색합니다.`);
+
+            if (routingControl) map.removeControl(routingControl);
+
+             const router = L.Routing.osrmv1({ /* ... OSRM 옵션 동일 ... */ });
+
+            routingControl = L.Routing.control({
+                 waypoints: [startLatLng, endLatLng],
+                 router: router,
+                 routeWhileDragging: false, show: true, addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true,
+                 lineOptions: { styles: [{ color: '#007AFF', opacity: 0.8, weight: 7 }] },
+                 createMarker: () => null,
+                 summaryTemplate: '<div class="leaflet-routing-summary"><h2>{name}</h2><h3>거리: {distance}, 예상 시간: {time}</h3></div>'
+             })
+             .on('routesfound', function(e) { /* ... 동일 ... */ })
+             .on('routingerror', function(e) { /* ... 동일 (개선된 오류 처리) ... */ })
+             .addTo(map);
+        }
+
+        // --- 지도 스타일 변경 ---
+        function setMapStyle(styleKey) {
+             if (!tileLayers[styleKey] || currentTileLayer === tileLayers[styleKey]) return;
+             if (currentTileLayer) { map.removeLayer(currentTileLayer); }
+             currentTileLayer = tileLayers[styleKey];
+             currentTileLayer.addTo(map).on('load', () => console.log(`Tile layer '${styleKey}' loaded.`));
+             console.log("Map style changed to:", styleKey);
+        }
+
+        // --- 초기화 및 이벤트 리스너 ---
+        document.addEventListener('DOMContentLoaded', () => {
+             console.log("DOM Loaded. Initializing...");
+             try {
+                 // 지도 객체 생성
+                 map = L.map('map', { zoomControl: false }).setView([36.5, 127.5], 7);
+                 console.log("Map object created.");
+                 L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+                 // 기본 지도 스타일 로드
+                 setMapStyle('voyager');
+
+                 // 지도가 준비되면 이벤트 리스너 설정
+                 map.whenReady(() => {
+                     console.log("Map is ready. Setting up listeners...");
+
+                     // UI 토글 리스너
+                     uiToggleButton.onclick = toggleUI;
+
+                     // 주소 검색 리스너
+                     btnSearchStartInput.onclick = () => openDaumPostcode('start');
+                     inputStart.addEventListener('keypress', (e) => { if (e.key === 'Enter') openDaumPostcode('start'); });
+                     btnSearchEndInput.onclick = () => openDaumPostcode('end');
+                     inputEnd.addEventListener('keypress', (e) => { if (e.key === 'Enter') openDaumPostcode('end'); });
+
+                     // 지도 클릭 모드 리스너
+                     btnClickStart.onclick = () => { settingMode = 'click-start'; console.log("Setting mode to click-start"); updateUI(); };
+                     btnClickEnd.onclick = () => { settingMode = 'click-end'; console.log("Setting mode to click-end"); updateUI(); };
+
+                     // 지도 클릭 이벤트
+                     map.on('click', (e) => {
+                         const clickedLatLng = e.latlng;
+                         console.log(`Map clicked at [${clickedLatLng.lat}, ${clickedLatLng.lng}], Current mode: ${settingMode}`);
+                         if (settingMode === 'click-start') {
+                             inputStart.value = `${clickedLatLng.lat.toFixed(5)}, ${clickedLatLng.lng.toFixed(5)}`;
+                             createOrUpdateMarker('start', clickedLatLng, `📍 출발<br>${inputStart.value}`);
+                         } else if (settingMode === 'click-end') {
+                             inputEnd.value = `${clickedLatLng.lat.toFixed(5)}, ${clickedLatLng.lng.toFixed(5)}`;
+                             createOrUpdateMarker('end', clickedLatLng, `🏁 도착<br>${inputEnd.value}`);
+                         }
+                     });
+
+                     // 현재 위치 리스너
+                     btnCurrentLocation.onclick = async () => {
+                         showLoading("현재 위치 찾는 중...");
+                         try {
+                             const pos = await getCurrentLocationPromise();
+                             if (!(pos && pos.latlng)) throw new Error("Invalid location data.");
+                             const currentLatLng = L.latLng(pos.latlng.lat, pos.latlng.lng); // L.latLng로 변환
+                             inputStart.value = "현재 위치";
+                             createOrUpdateMarker('start', currentLatLng, '📍 현재 위치 (출발)');
+                             hideLoading();
+                             updateUI("현재 위치를 출발지로 설정했습니다.");
+                             speak("현재 위치를 출발지로 설정했습니다.");
+                         } catch (error) {
+                             hideLoading();
+                             let errorMsg = "현재 위치를 가져올 수 없습니다.";
+                             if (error.code === 1) errorMsg = "위치 정보 접근 권한이 거부되었습니다.";
+                             else if (error.code === 2) errorMsg = "위치 정보를 사용할 수 없습니다.";
+                             else if (error.code === 3) errorMsg = "위치 정보를 가져오는 데 시간이 초과되었습니다.";
+                             console.error("Geolocation Error:", error);
+                             speak(errorMsg);
+                             showToast(errorMsg, 4000);
+                             updateUI("현재 위치 오류.");
+                         }
+                     };
+
+                     // 음성 인식 리스너
+                     if (recognition) { btnMic.onclick = startSpeechRecognition; }
+                     else { if(btnMic) { btnMic.disabled = true; btnMic.title = "음성 인식을 지원하지 않는 브라우저입니다."; } }
+
+                     // 경로 프로필 리스너
+                     profileTabs.addEventListener('click', (e) => {
+                         const button = e.target.closest('.profile-btn');
+                         if (button && button.dataset.profile && button.dataset.profile !== routingProfile) {
+                             routingProfile = button.dataset.profile;
+                             profileTabs.querySelectorAll('.profile-btn').forEach(btn => btn.classList.remove('active'));
+                             button.classList.add('active');
+                             console.log("Routing profile set to:", routingProfile);
+                             if (routingControl && startLatLng && endLatLng) findRoute();
+                         }
+                     });
+
+                     // 지도 스타일 리스너
+                     mapStyleSelect.onchange = (e) => setMapStyle(e.target.value);
+
+                     // 경로 찾기 리스너
+                     btnFindRoute.onclick = findRoute;
+
+                     // 초기 UI 설정
+                     profileTabs.querySelector(`[data-profile="${routingProfile}"]`)?.classList.add('active'); // null 체크 추가
+                     updateUI();
+
+                     // Daum 스크립트 로드 확인
+                     if (typeof daum === 'undefined' || typeof daum.Postcode === 'undefined') {
+                         console.error("Daum Postcode 스크립트 로드 실패!");
+                         showToast("주소 검색 서비스 로드 실패!", 5000);
+                         if(btnSearchStartInput) btnSearchStartInput.disabled = true;
+                         if(btnSearchEndInput) btnSearchEndInput.disabled = true;
+                     } else { console.log("Daum Postcode script loaded."); }
+
+                     console.log("Initialization complete. Event listeners set.");
+
+                 }); // end map.whenReady
+
+             } catch (error) {
+                 console.error("Map Initialization Failed:", error);
+                 alert("지도 초기화에 실패했습니다. 페이지를 새로고침하거나 브라우저 설정을 확인해주세요.");
+                 document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: red;">지도 로딩 실패! 개발자 콘솔을 확인하세요.</div>';
+             }
+        }); // end DOMContentLoaded
+
+    </script>
+</body>
+</html>
